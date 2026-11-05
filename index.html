@@ -438,6 +438,14 @@ function hl(text,terms){
   }
   if(open)out+='</mark>';return out;
 }
+function activeLoans(reg){
+  if(!reg)return [];
+  return (LOANS||[]).filter(function(l){return !l.devuelto&&String(l.registro)===String(reg);});
+}
+function availInfo(r){
+  var tot=parseInt(r[F.ej],10)||0,ls=activeLoans(r[F.reg]);
+  return {tot:tot,ls:ls,disp:Math.max(0,tot-ls.length)};
+}
 function render(){
   var rows=filtered(false);
   rows.sort(sorter($('sort').value));
@@ -456,7 +464,14 @@ function render(){
     var r=o.r,est=r[F.est];
     var tag='<span class="tag '+(est||'X')+'">'+EST[est]+'</span>';
     var baja=(o.del?'<span class="tag baja">Eliminado</span> ':'')+(r[F.baja]?'<span class="tag baja">'+esc(r[F.baja])+'</span>':'');
+    var av=availInfo(r),n=av.ls.length;
+    var ejTxt=av.tot?av.tot+' en total · '+av.disp+(av.disp===1?' disponible':' disponibles')+(n?' · '+n+(n===1?' prestado':' prestados'):''):'—';
+    var prest=n?'<div style="grid-column:1/-1"><dt>Prestado a</dt><dd>'+av.ls.map(function(l){
+      var late=isLate(l);
+      return '<div><b>'+esc(l.nombre)+'</b>'+(l.curso?' ('+esc(l.curso)+')':'')+' · devolver el '+esc(fdate(l.devolucion))+(late?' <span class="tag M">Vencido</span>':'')+'</div>';
+    }).join('')+'</dd></div>':'';
     var det='<dl>'+
+      '<div><dt>Ejemplares</dt><dd>'+ejTxt+'</dd></div>'+prest+
       '<div><dt>Edición</dt><dd>'+(esc(r[F.edic])||'—')+'</dd></div>'+
       '<div><dt>Procedencia</dt><dd>'+(esc(r[F.proc])||'—')+'</dd></div>'+
       '<div><dt>ISBN</dt><dd>'+(esc(r[F.isbn])||'—')+'</dd></div>'+
@@ -468,7 +483,7 @@ function render(){
     var isOpen=!!OPEN[o.id];
     h+='<div class="item'+(isOpen?' open':'')+'" data-id="'+o.id+'"><button class="row'+(o.baja||o.del?' off':'')+'" aria-expanded="'+isOpen+'">'+
       '<span class="cell c-reg num"><span class="lbl">Reg. </span>'+esc(r[F.reg])+'</span>'+
-      '<span class="cell t c-titulo">'+(hl(r[F.titulo],terms)||'(sin título)')+'</span>'+
+      '<span class="cell t c-titulo">'+(hl(r[F.titulo],terms)||'(sin título)')+(n?' <span class="tag '+(av.disp===0?'M':'R')+'">'+(av.disp===0?'Prestado':n+(n===1?' prestado':' prestados'))+'</span>':'')+'</span>'+
       '<span class="cell c-autor">'+(hl(r[F.autor],terms)||'<span class="num">Sin autor</span>')+'</span>'+
       '<span class="cell c-edit">'+hl(r[F.edit],terms)+'</span>'+
       '<span class="cell c-anio num"><span class="lbl">Año </span>'+esc(r[F.anio])+'</span>'+
@@ -669,6 +684,11 @@ function longDate(iso){
   if(!iso)return '';var p=iso.split('-'),d=new Date(+p[0],+p[1]-1,+p[2]);
   return DIAS[d.getDay()]+' '+d.getDate()+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
 }
+function availMsg(r){
+  var a=availInfo(r);
+  if(!a.tot||!a.ls.length)return a.tot?' Disponibles: '+a.disp+' de '+a.tot+'.':'';
+  return ' Disponibles: '+a.disp+' de '+a.tot+'. Prestado a '+a.ls.map(function(l){return l.nombre;}).join(', ')+'.';
+}
 var devManual=false;
 function devHint(){$('b_devhint').textContent=$('b_dev').value?'Devolución: '+longDate($('b_dev').value):'';}
 function syncDev(){
@@ -682,7 +702,7 @@ function openBook(o){
   $('b_clas').value='';$('b_nombre').value='';$('b_curso').value='';$('b_mail').value='';
   $('b_titulo').value=r?r[F.titulo]:'';$('b_autor').value=r?r[F.autor]:'';
   $('b_fecha').value=isoDate(now);$('b_hora').value=pad(now.getHours())+':'+pad(now.getMinutes());
-  $('b_reghint').textContent='';syncDev();
+  $('b_reghint').textContent=r?availMsg(r):'';syncDev();
   show('mBook');setTimeout(function(){$(r?'b_nombre':'b_reg').focus();},30);
 }
 $('bookBtn').onclick=function(){openBook(null);};
@@ -695,7 +715,7 @@ $('b_reg').addEventListener('input',function(){
   for(var i=0;i<D.length;i++){
     if(!D[i].del&&String(D[i].r[F.reg])===v){
       $('b_titulo').value=D[i].r[F.titulo];$('b_autor').value=D[i].r[F.autor];
-      h.textContent='Libro encontrado en el inventario.';return;
+      h.textContent='Libro encontrado en el inventario.'+availMsg(D[i].r);return;
     }
   }
   h.textContent='No hay un libro con ese registro; completa título y autor a mano.';
@@ -842,11 +862,11 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')hide('mLoans
 if(AUTH){
   AUTH.onAuthStateChanged(function(u){
     if(loansUnsub){loansUnsub();loansUnsub=null;}
-    LOANS=[];renderBanner();
+    LOANS=[];renderBanner();render();
     if(!u)return;
     loansUnsub=FS.collection('prestamos').onSnapshot(function(s){
       LOANS=s.docs.map(function(d){var o=d.data();o.id=o.id||d.id;return o;});
-      renderBanner();if(!$('mLoans').hidden)renderLoans();
+      renderBanner();render();if(!$('mLoans').hidden)renderLoans();
     },function(){toast('No se pueden leer los préstamos: revisa las reglas de Firebase.');});
   });
 }
