@@ -309,24 +309,13 @@ body.locked>.site,body.locked>.tools,body.locked>main{display:none}
   </div>
 </div>
 
-<div class="mbg" id="mLogin" hidden>
-  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="mLoginT">
-    <h3 id="mLoginT">Ver préstamos</h3>
-    <p class="mute">Ingresa con la cuenta de biblioteca.</p>
-    <div class="fld"><label for="lg_mail">Correo</label><input id="lg_mail" type="email" autocomplete="username"></div>
-    <div class="fld" style="margin-top:10px"><label for="lg_pass">Contraseña</label><input id="lg_pass" type="password" autocomplete="current-password"></div>
-    <p class="err" id="lgErr" hidden></p>
-    <div class="mact"><button class="btn" id="lgCancel">Cancelar</button><button class="btn gold" id="lgOk">Entrar</button></div>
-  </div>
-</div>
-
 <div class="mbg" id="mLoans" hidden>
   <div class="modal lg" role="dialog" aria-modal="true" aria-labelledby="mLoansT">
     <h3 id="mLoansT">Libros prestados</h3>
     <div class="fld"><input id="l_q" type="search" placeholder="Buscar por nombre, curso, título o registro…" aria-label="Buscar préstamos"></div>
     <div class="lfil" id="lFil"></div>
     <div class="lscroll" id="lList"></div>
-    <div class="mact"><button class="btn" id="lOut">Cerrar sesión</button><button class="btn gold" id="lClose">Cerrar</button></div>
+    <div class="mact"><button class="btn gold" id="lClose">Cerrar</button></div>
   </div>
 </div>
 
@@ -767,11 +756,18 @@ $('donePrint').onclick=function(){window.print();};
 
 /* ---------- PIN de entrada ---------- */
 var PIN_HASH="9e6296be2bb963df7daa2b230a2a1f34b1bcd655c10fa6c1f6c05782fee95791";
+var LIB_EMAIL="biblioteca@incosaf.cl",LIB_SUFFIX="-incosaf";
 function unlockPage(){document.body.classList.remove('locked');hide('pin');}
 function tryPin(){
   if(sha256($('pinIn').value)===PIN_HASH){
     try{sessionStorage.setItem('pin_ok','1');}catch(err){}
     unlockPage();
+    /* El PIN también inicia sesión en Firebase con la cuenta de biblioteca (clave = PIN + sufijo). */
+    if(AUTH&&!AUTH.currentUser){
+      AUTH.signInWithEmailAndPassword(LIB_EMAIL,$('pinIn').value+LIB_SUFFIX).catch(function(){
+        toast('No se pudo abrir la cuenta de biblioteca en Firebase. Revisa que exista (ver FIREBASE.md).');
+      });
+    }
   }else{show('pinErr');$('pinIn').value='';$('pinIn').focus();}
 }
 $('pinOk').onclick=tryPin;
@@ -824,21 +820,14 @@ function renderLoans(){
 function openLoans(f){if(f)lf=f;$('l_q').value='';renderLoans();show('mLoans');}
 $('loansBtn').onclick=function(){
   if(!AUTH){toast('Firebase no está configurado: no se pueden ver los préstamos.');return;}
-  if(AUTH.currentUser)openLoans();
-  else{$('lg_pass').value='';hide('lgErr');show('mLogin');setTimeout(function(){$('lg_mail').focus();},30);}
+  if(AUTH.currentUser){openLoans();return;}
+  /* sesión de Firebase vencida: se vuelve a pedir el PIN, que inicia sesión solo */
+  try{sessionStorage.removeItem('pin_ok');}catch(err){}
+  document.body.classList.add('locked');$('pinIn').value='';show('pin');
+  setTimeout(function(){$('pinIn').focus();},50);
 };
 $('lateSee').onclick=function(){openLoans('late');};
-function doLogin(){
-  var b=$('lgOk');b.disabled=true;
-  AUTH.signInWithEmailAndPassword(val('lg_mail'),$('lg_pass').value).then(function(){hide('mLogin');openLoans();})
-  .catch(function(){$('lgErr').textContent='Correo o contraseña incorrectos.';show('lgErr');})
-  .then(function(){b.disabled=false;});
-}
-$('lgOk').onclick=doLogin;
-$('lg_pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-$('lgCancel').onclick=function(){hide('mLogin');};
 $('lClose').onclick=function(){hide('mLoans');};
-$('lOut').onclick=function(){hide('mLoans');if(AUTH)AUTH.signOut();toast('Sesión cerrada');};
 $('l_q').addEventListener('input',renderLoans);
 $('lFil').addEventListener('click',function(e){var b=e.target.closest('[data-f]');if(b){lf=b.getAttribute('data-f');renderLoans();}});
 $('lList').addEventListener('click',function(e){
@@ -849,7 +838,7 @@ $('lList').addEventListener('click',function(e){
   .then(function(){toast('Libro marcado como devuelto');})
   .catch(function(){b.disabled=false;toast('No se pudo actualizar. Revisa tu conexión.');});
 });
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){hide('mLogin');hide('mLoans');}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')hide('mLoans');});
 if(AUTH){
   AUTH.onAuthStateChanged(function(u){
     if(loansUnsub){loansUnsub();loansUnsub=null;}

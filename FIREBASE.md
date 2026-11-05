@@ -33,8 +33,11 @@ service cloud.firestore {
 ## 2b. Cuenta de biblioteca (para el botón «Préstamos»)
 1. Firebase → **Compilación → Authentication → Comenzar**.
 2. Pestaña **Método de acceso** → **Correo electrónico/contraseña** → Habilitar → Guardar.
-3. Pestaña **Usuarios** → **Agregar usuario** → escribe un correo y una contraseña. Esa es la cuenta de biblioteca.
-4. En la página, botón **Préstamos** → ingresa con esa cuenta. Se ve la lista, y si hay libros con plazo vencido aparece el aviso rojo «Pendientes para devolver».
+3. Pestaña **Usuarios** → **Agregar usuario**:
+   - Correo: `biblioteca@incosaf.cl`
+   - Contraseña: el PIN de la página seguido de `-incosaf` (sin espacios).
+4. El PIN de la página inicia sesión solo en esta cuenta, sin pedir otra clave. Con eso el botón **Préstamos** muestra la lista y, si hay libros con plazo vencido, aparece el aviso rojo «Pendientes para devolver».
+5. Si cambias el PIN en `index.html`, cambia también la contraseña de esta cuenta (PIN nuevo + `-incosaf`). La contraseña no se guarda en el repositorio.
 
 ## 3. Comprobante por correo (opcional)
 Firebase no envía correos por sí solo. Instala la extensión **Trigger Email from Firestore**
