@@ -10,7 +10,7 @@ Mientras `FIREBASE_CONFIG` en `index.html` esté vacío, la página guarda solo 
 4. Pégalo en `index.html`, en `var FIREBASE_CONFIG={...}`.
 
 ## 2. Reglas de seguridad (Firestore → Reglas)
-La página es pública, así que solo permitimos **crear** préstamos; la lectura es solo desde la consola de Firebase.
+La página es pública: cualquiera puede **crear** un préstamo, pero solo la cuenta de biblioteca (con sesión iniciada) puede leerlos y marcarlos como devueltos.
 
 ```
 rules_version = '2';
@@ -19,7 +19,8 @@ service cloud.firestore {
     match /prestamos/{id} {
       allow create: if request.resource.data.nombre is string
                     && request.resource.data.titulo is string;
-      allow read, update, delete: if false;
+      allow read, update: if request.auth != null;
+      allow delete: if false;
     }
     match /mail/{id} {
       allow create: if request.resource.data.keys().hasOnly(['to','message']);
@@ -28,6 +29,12 @@ service cloud.firestore {
   }
 }
 ```
+
+## 2b. Cuenta de biblioteca (para el botón «Préstamos»)
+1. Firebase → **Compilación → Authentication → Comenzar**.
+2. Pestaña **Método de acceso** → **Correo electrónico/contraseña** → Habilitar → Guardar.
+3. Pestaña **Usuarios** → **Agregar usuario** → escribe un correo y una contraseña. Esa es la cuenta de biblioteca.
+4. En la página, botón **Préstamos** → ingresa con esa cuenta. Se ve la lista, y si hay libros con plazo vencido aparece el aviso rojo «Pendientes para devolver».
 
 ## 3. Comprobante por correo (opcional)
 Firebase no envía correos por sí solo. Instala la extensión **Trigger Email from Firestore**
