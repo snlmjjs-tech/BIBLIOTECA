@@ -777,14 +777,19 @@ $('donePrint').onclick=function(){window.print();};
 /* ---------- PIN de entrada ---------- */
 var PIN_HASH="9e6296be2bb963df7daa2b230a2a1f34b1bcd655c10fa6c1f6c05782fee95791";
 var LIB_EMAIL="biblioteca@incosaf.cl",LIB_SUFFIX="-incosaf";
+function libSignIn(){
+  var pw='';try{pw=sessionStorage.getItem('lib_pw')||'';}catch(err){}
+  if(!AUTH||!pw)return Promise.reject(new Error('sin clave'));
+  return AUTH.signInWithEmailAndPassword(LIB_EMAIL,pw);
+}
 function unlockPage(){document.body.classList.remove('locked');hide('pin');}
 function tryPin(){
   if(sha256($('pinIn').value)===PIN_HASH){
-    try{sessionStorage.setItem('pin_ok','1');}catch(err){}
+    try{sessionStorage.setItem('pin_ok','1');sessionStorage.setItem('lib_pw',$('pinIn').value+LIB_SUFFIX);}catch(err){}
     unlockPage();
     /* El PIN también inicia sesión en Firebase con la cuenta de biblioteca (clave = PIN + sufijo). */
     if(AUTH&&!AUTH.currentUser){
-      AUTH.signInWithEmailAndPassword(LIB_EMAIL,$('pinIn').value+LIB_SUFFIX).catch(function(){
+      libSignIn().catch(function(){
         toast('No se pudo abrir la cuenta de biblioteca en Firebase. Revisa que exista (ver FIREBASE.md).');
       });
     }
@@ -841,10 +846,10 @@ function openLoans(f){if(f)lf=f;$('l_q').value='';renderLoans();show('mLoans');}
 $('loansBtn').onclick=function(){
   if(!AUTH){toast('Firebase no está configurado: no se pueden ver los préstamos.');return;}
   if(AUTH.currentUser){openLoans();return;}
-  /* sesión de Firebase vencida: se vuelve a pedir el PIN, que inicia sesión solo */
-  try{sessionStorage.removeItem('pin_ok');}catch(err){}
-  document.body.classList.add('locked');$('pinIn').value='';show('pin');
-  setTimeout(function(){$('pinIn').focus();},50);
+  /* sesión de Firebase aún no lista o vencida: se reconecta en silencio, sin pedir el PIN otra vez */
+  libSignIn().then(openLoans).catch(function(){
+    toast('No se pudo conectar con los préstamos. Revisa tu conexión y que exista la cuenta de biblioteca en Firebase.');
+  });
 };
 $('lateSee').onclick=function(){openLoans('late');};
 $('lClose').onclick=function(){hide('mLoans');};
@@ -863,7 +868,7 @@ if(AUTH){
   AUTH.onAuthStateChanged(function(u){
     if(loansUnsub){loansUnsub();loansUnsub=null;}
     LOANS=[];renderBanner();render();
-    if(!u)return;
+    if(!u){libSignIn().catch(function(){});return;}
     loansUnsub=FS.collection('prestamos').onSnapshot(function(s){
       LOANS=s.docs.map(function(d){var o=d.data();o.id=o.id||d.id;return o;});
       renderBanner();render();if(!$('mLoans').hidden)renderLoans();
